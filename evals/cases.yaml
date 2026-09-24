@@ -1,0 +1,110 @@
+# Golden cases.
+#
+# Each case scripts what the analyst emits, so the case tests the graph and the
+# governance layer rather than a model's mood. The retrieval is real: the
+# evidence ids below are only grounded if the lexical retriever actually returns
+# those chunks for that question, which is what makes the ungrounded cases
+# meaningful instead of rigged.
+#
+# Run: python evals/run_evals.py
+
+- id: governance-gaps-grounded
+  description: >
+    The ordinary case. Findings cite chunks the retriever returned, the score
+    clears the floor, the reviewer approves, a roadmap is delivered.
+  question: fare collection dataset named owner warehouse access revocation automated quality checks
+  findings:
+    - claim: The fare-collection dataset has no named owner while three teams write to it.
+      evidence_ids: ["data-governance#1"]
+      severity: high
+    - claim: Warehouse access is granted per person with no revocation path, leaving accounts active after people leave.
+      evidence_ids: ["data-governance#3"]
+      severity: high
+    - claim: There are no automated data quality checks; errors surface through downstream consumers.
+      evidence_ids: ["data-governance#4"]
+      severity: medium
+  reviewer: approve
+  expect:
+    halted: false
+    groundedness_passed: true
+    approved: true
+    maturity_level: 2
+
+- id: invented-evidence-blocked
+  description: >
+    The failure this whole layer exists for. One finding cites a chunk id that
+    was never retrieved, the score drops below the floor, the writer never runs
+    and the reviewer is told why.
+  question: data lineage integration catalogue
+  findings:
+    - claim: Lineage is not recorded and is reconstructed by asking the analyst who built the report.
+      evidence_ids: ["data-architecture#4"]
+      severity: high
+    - claim: An external audit in 2019 found the Authority non-compliant with national transit data standards.
+      evidence_ids: ["audit-2019#0"]
+      severity: high
+  reviewer: approve
+  expect:
+    halted: false
+    groundedness_passed: false
+    approved: false
+    roadmap_written: false
+
+- id: uncited-claim-blocked
+  description: >
+    A claim with no evidence at all. Plausible, on topic, and still ungrounded:
+    "no evidence" and "unverified" are not the same thing, and the scorer treats
+    an empty citation list as the former.
+  question: AI pilots evaluation success criteria governance
+  findings:
+    - claim: Neither AI pilot defined success criteria before starting.
+      evidence_ids: ["ai-experiments#2"]
+      severity: high
+    - claim: The Authority plans to hire a Head of Data next year.
+      evidence_ids: []
+      severity: low
+  reviewer: approve
+  expect:
+    groundedness_passed: false
+    approved: false
+
+- id: budget-ceiling-halts
+  description: >
+    The retriever is handed a model that costs more per call than its ceiling
+    allows. The run halts at the first hop with a reason, rather than finishing
+    on a truncated context nobody chose.
+  question: warehouse transformations version control
+  retriever_cost: 0.09   # ceiling is 0.05
+  findings: []
+  reviewer: approve
+  expect:
+    halted: true
+    approved: null
+
+- id: reviewer-rejects
+  description: >
+    A clean run the human declines anyway. The gate is a decision point, not a
+    formality, so a passing score must not be able to approve itself.
+  question: ridership definitions disagree between reports
+  findings:
+    - claim: Ridership has three definitions in active use and reports do not state which they use.
+      evidence_ids: ["analytics-practice#2"]
+      severity: high
+  reviewer: reject
+  expect:
+    halted: false
+    groundedness_passed: true
+    approved: false
+
+- id: no-findings-scores-clean
+  description: >
+    Finding nothing is a valid result. An empty finding set scores 1.0 rather
+    than 0.0, because a diagnostic that found no gaps has not fabricated one.
+  question: passenger counting dataset named owner handbook
+  findings: []
+  reviewer: approve
+  expect:
+    halted: false
+    groundedness_passed: true
+    approved: true
+    maturity_level: 5
